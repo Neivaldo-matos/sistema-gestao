@@ -16,6 +16,7 @@ use Filament\Tables\Filters\SelectFilter;
 use Filament\Forms\Components\DatePicker;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
+use Filament\Notifications\Notification;
 
 class TaskResource extends Resource
 {
@@ -64,10 +65,30 @@ class TaskResource extends Resource
             ->columns([
             Tables\Columns\TextColumn::make('titulo')
                 ->label('Título')
+                ->color(fn ($record) => $record->concluida ? 'font-style:italic; opacity: 0.5' : '')
                 ->searchable(), // Adiciona barra de busca para este campo
 
+            Tables\Columns\TextColumn::make('descricao')
+                ->label('Descrição')
+                ->limit(30) // Mostra apenas o começo do texto na tabela
+                ->searchable(), // AGORA pesquisa também na descrição!
+
+            Tables\Columns\TextColumn::make('category.nome')
+                ->label('Categoria')
+                ->searchable() // Pesquisa pelo nome da categoria ligada
+                ->sortable(),
+
             Tables\Columns\CheckboxColumn::make('concluida')
-                ->label('Concluída'),
+                ->label('Concluída')
+                ->afterStateUpdated(function ($state, $record){
+                    if ($state) { //Se foi marcado como verdade (true)
+                        Notification::make()
+                            ->title('Parabéns!')
+                            ->body("A tarefa \"{$record->titulo}\" foi finalizada.")
+                            ->success() // cor verde
+                            ->send();
+                        }
+                    }),
                 
             Tables\Columns\TextColumn::make('created_at')
                 ->label('Criada em')
@@ -80,7 +101,8 @@ class TaskResource extends Resource
                 ->date('d/m/Y') // Formata a data para o padraão brasileiro
                 ->color(fn ($record) => $record && $record->due_date < now() && !$record->concluida ? 'danger' : 'gray' )
                 ->sortable(),
-            ])
+
+                ])
             ->filters([
                 // Aqui podemos adicionar filtros por status, 
                 // Filtro para mostrar concluidas, pendentes ou todas
@@ -151,4 +173,24 @@ class TaskResource extends Resource
             'edit' => Pages\EditTask::route('/{record}/edit'),
         ];
     }
+
+protected static ?string $modelLabel = 'Tarefa';
+protected static ?string $pluralModelLabel = 'Tarefas';
+
+// Navegação - agrupamento de menu
+protected static ?string $navigationGroup = 'Gestão';
+protected static ?int $navigationSort = 1; // Ordem no grupo
+
+// contador
+public static function getNavigationBadge(): ?string
+{
+    // Retorna o número de tarefas que NÃO estão concluídas
+    return static::getModel()::where('concluida', false)->count();
+}
+
+public static function getNavigationBadgeColor(): ?string
+{
+    // Se houver mais de 0 tarefas, fica laranja/amarelo (warning)
+    return static::getModel()::where('concluida', false)->count() > 0 ? 'warning' : 'success';
+}
 }

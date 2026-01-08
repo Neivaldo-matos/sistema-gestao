@@ -28,4 +28,9 @@ class TaskStats extends BaseWidget
                 ->color('danger'),
         ];
     }
+
+    public static bool $isLazy = false;
+
+    // Adicione isto para ele NÃO aparecer na dashboard automaticamente
+    protected static bool $isDiscovered = false;
 }

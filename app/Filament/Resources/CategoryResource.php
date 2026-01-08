@@ -75,4 +75,8 @@ class CategoryResource extends Resource
             'edit' => Pages\EditCategory::route('/{record}/edit'),
         ];
     }
+
+// Navegação - agrupamento de menu
+protected static ?string $navigationGroup = 'Gestão';
+protected static ?int $navigationSort = 2;
 }
