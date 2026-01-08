@@ -13,6 +13,7 @@ class Task extends Model
         'descricao',
         'concluida',
         'category_id', // atributo de outra tabela
+        'due_date',
     ];
 
     // definicao que o Task pertence a uma category

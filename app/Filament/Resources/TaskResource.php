@@ -2,6 +2,7 @@
 
 namespace App\Filament\Resources;
 
+use Filament\Tables\Filters\TernaryFilter; // tem que ficar no topo
 use App\Filament\Resources\TaskResource\Pages;
 use App\Filament\Resources\TaskResource\RelationManagers;
 use App\Models\Task;
@@ -10,6 +11,9 @@ use Filament\Forms\Form;
 use Filament\Resources\Resource;
 use Filament\Tables;
 use Filament\Tables\Table;
+use Filament\Tables\Filters\Filter;
+use Filament\Tables\Filters\SelectFilter;
+use Filament\Forms\Components\DatePicker;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\SoftDeletingScope;
 
@@ -45,6 +49,11 @@ class TaskResource extends Resource
                         ->label('Categoria')
                         ->searchable()
                         ->preload(),
+                    //     
+                    DatePicker::make('due_date')
+                        ->label('Data Vencimento')
+                        ->native(false) // Abre um calendário elegante em vez do seletor padrão
+                        ->displayFormat('d/m/Y'),
                 ])
             ]);
     }
@@ -57,17 +66,65 @@ class TaskResource extends Resource
                 ->label('Título')
                 ->searchable(), // Adiciona barra de busca para este campo
 
-            Tables\Columns\IconColumn::make('concluida')
-                ->label('Status')
-                ->boolean(), // Transforma o 0 ou 1 em ícone de check verde ou X vermelho
-
+            Tables\Columns\CheckboxColumn::make('concluida')
+                ->label('Concluída'),
+                
             Tables\Columns\TextColumn::make('created_at')
                 ->label('Criada em')
                 ->dateTime('d/m/Y H:i')
+                ->sortable()
+                ->toggleable(isToggledHiddenByDefault: true), // Esconde por padrão para limpar a tela
+
+            Tables\Columns\TextColumn::make('due_date')
+                ->label('Vencimento')
+                ->date('d/m/Y') // Formata a data para o padraão brasileiro
+                ->color(fn ($record) => $record && $record->due_date < now() && !$record->concluida ? 'danger' : 'gray' )
                 ->sortable(),
             ])
             ->filters([
                 // Aqui podemos adicionar filtros por status, 
+                // Filtro para mostrar concluidas, pendentes ou todas
+                TernaryFilter::make('concluida')
+                    ->label('Estado da Tarefa')
+                    ->placeholder('Todas')
+                    ->trueLabel('Apenas Concluídas')
+                    ->falseLabel('Apenas Pendentes'),
+
+                // Filtro para tarefas que vencem HOJE
+                Filter::make('due_date')
+                    ->form([
+                        DatePicker::make('vencimento_de')->label('Vence a partir de'),
+                        DatePicker::make('vencimento_ate')->label('Vence até'),
+                    ])
+                    ->query(function (Builder $query, array $data): Builder {
+                        return $query
+                            ->when(
+                                $data['vencimento_de'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('due_date', '<=', $date),
+                            )    
+                            ->when(
+                                $data['vencimento_ate'],
+                                fn (Builder $query, $date): Builder => $query->whereDate('due_date', '<=', $date),
+                            );
+                    })
+                    ->indicateUsing(function (array $data): array {
+                        $indicators = [];
+                        if ($data['vencimento_de'] ?? null) {
+                            $indicators[] = 'Inicio: ' . \Carbon\Carbon::parse($data['vencimento_de'])->format('d/m/Y');
+                        }
+                        if ($data['vencimento_ate'] ?? null) {
+                            $indicators[] = 'Fim: ' . \Carbon\Carbon::parse($data['vencimento_ate'])->format('d/m/Y');
+                        }
+                        return $indicators;
+                    }),
+
+                    //->label('Vencem Hoje')
+                    //->query(fn (Builder $query): Builder => $query->whereDate('due_date', now())),
+
+                // Filtro por categoria
+            SelectFilter::make('category_id')
+                ->label('Categoria')
+                ->relationship('category', 'nome'),
             ])
             ->actions([
                 Tables\Actions\EditAction::make(),
